@@ -35,3 +35,10 @@ textarea{width:100%;min-height:120px}
 .legend{font-size:12px;color:var(--muted)}
 .kpill{padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border);background:#101116}
 .status{font-size:12px;color:var(--muted)}
+
+
+/* Melhorar layout do seletor de datas */
+.date-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center}
+.date-actions input[type="date"]{padding:10px 12px;font-size:14px}
+.date-actions button{padding:10px 14px;font-weight:600}
+@media (max-width: 640px){ .date-actions>*{flex:1 1 100%} .date-actions button{width:100%} }
