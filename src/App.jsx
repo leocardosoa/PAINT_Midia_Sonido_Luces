@@ -74,7 +74,7 @@ function mergePayload(local, remote){
 
 export default function App(){
   const [logo,setLogo] = useState('/logo.png')
-  const [members,setMembers] = useState([{name:'Alice',teams:[]},{name:'Bruno',teams:[]},{name:'Camila',teams:[]}])
+  const [members,setMembers] = useState([])
   const [newMember,setNewMember] = useState('')
   const [teams,setTeams] = useState([{ id:'team-1', name:'Mídia', roles:['Front','Livestream','Câmeras'] }])
   const [activeTeamId,setActiveTeamId] = useState('team-1')
@@ -181,7 +181,35 @@ export default function App(){
   // UI helpers
   function onLogoUpload(file){ const r=new FileReader(); r.onload=()=>setLogo(String(r.result)); r.readAsDataURL(file) }
   function addMember(){ const n=newMember.trim(); if(!n) return; if(members.some(m=>m.name===n)){ alert('Esse nome já existe.'); return } setMembers([...members,{name:n,teams:[]}]); setNewMember('') }
-  function removeMember(name){
+  
+function renameMember(oldName, newName){
+  const n = (newName||'').trim();
+  if(!n || oldName === n) return;
+  if(members.some(m => m.name === n)){
+    alert('Já existe um membro com esse nome.');
+    return;
+  }
+  // 1) renomeia na lista de membros
+  setMembers(prev => prev.map(m => m.name === oldName ? {...m, name: n} : m));
+  // 2) renomeia em toda a escala (arrays de nomes)
+  setScheduleDate(prev => {
+    const c = structuredClone(prev);
+    for(const iso of Object.keys(c)){
+      for(const teamId of Object.keys(c[iso]||{})){
+        for(const role of Object.keys(c[iso][teamId]||{})){
+          const v = c[iso][teamId][role];
+          const arr = Array.isArray(v) ? v : (v ? [v] : []);
+          const changed = arr.map(x => x === oldName ? n : x);
+          // evita duplicações após rename
+          c[iso][teamId][role] = Array.from(new Set(changed));
+        }
+      }
+    }
+    return c;
+  });
+}
+
+function removeMember(name){
     setMembers(members.filter(m=>m.name!==name))
     setScheduleDate(prev=>{ const c=structuredClone(prev); for(const iso of Object.keys(c)){ for(const teamId of Object.keys(c[iso]||{})){ for(const role of Object.keys(c[iso][teamId]||{})){ const arr=asArray(c[iso][teamId][role]); if(arr.includes(name)) c[iso][teamId][role]=arr.filter(x=>x!==name) } } } return c })
   }
@@ -355,7 +383,7 @@ export default function App(){
                     {g.list.map(m => (
                       <div key={m.name} className="vstack">
                         <div className="hstack" style={{justifyContent:'space-between'}}>
-                          <span>{m.name}</span>
+                          <input defaultValue={m.name} onBlur={e=>renameMember(m.name, e.target.value)} style={{minWidth:160}}/>
                           <button onClick={()=> removeMember(m.name)}>{t.remove}</button>
                         </div>
                         <select multiple size={3}
@@ -380,7 +408,7 @@ export default function App(){
                   {unassigned.map(m => (
                     <div key={m.name} className="vstack">
                       <div className="hstack" style={{justifyContent:'space-between'}}>
-                        <span>{m.name}</span>
+                        <input defaultValue={m.name} onBlur={e=>renameMember(m.name, e.target.value)} style={{minWidth:160}}/>
                         <button onClick={()=> removeMember(m.name)}>{t.remove}</button>
                       </div>
                       <select multiple size={3}
