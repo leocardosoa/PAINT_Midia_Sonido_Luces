@@ -1,19 +1,16 @@
-# Escala — Equipes & Tarefas (PT/ES/EN)
+# Escala — Equipes & Tarefas (Semanal + Datas, PT/ES/EN)
 
-App React (Vite) para controle de escala com múltiplas **equipes** e **tarefas**, dias selecionáveis (Domingo fixo), validação para impedir a mesma pessoa no mesmo dia em equipes/tarefas diferentes, i18n PT/ES/EN, logo configurável, salvar local, exportar/importar JSON.
+- Múltiplas equipes, com tarefas configuráveis por equipe e **roster por equipe** (um membro pode estar em várias equipes).
+- **Modos**: Semanal (dias fixos, Domingo obrigatório) e **Datas específicas** (seleção por calendário).
+- Regra: no mesmo dia/data, **não pode** estar em duas equipes/tarefas diferentes (o app garante).
+- Persistência: tudo salvo em **localStorage** (não perde seleções ao sair).
+- Exportação: **JSON** e **XLSX** (aba Semanal e aba Datas).
+- Logo configurável, i18n (PT/ES/EN), impressão.
 
-## Rodar localmente
-```bash
+## Rodar
 npm install
 npm run dev
-```
 
-## Build e publicar
-```bash
+## Build (Netlify / Vercel / GH Pages)
 npm run build
-# dist/ contém os arquivos estáticos para publicar em Netlify/Vercel/GitHub Pages
-```
-
-## Observações
-- Não há backend; tudo persiste no localStorage do navegador.
-- Para bloquear edições em um site público, avalie criar uma flag de "modo leitura" com query-string (?readonly=1).
+# Publicar /dist
