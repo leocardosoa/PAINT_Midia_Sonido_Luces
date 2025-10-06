@@ -15,22 +15,6 @@ function isSundayISO(iso){ const [y,m,d] = iso.split('-').map(Number); return ne
 const WEEKDAY_NAMES = { pt: ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'], es: ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'], en: ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'] }
 function weekdayName(iso, lang='pt'){ const [y,m,d] = iso.split('-').map(Number); const dow = new Date(Date.UTC(y, m-1, d)).getUTCDay(); return WEEKDAY_NAMES[lang][dow] }
 
-function groupMembersByTeam(teams, members){
-  const byId = Object.fromEntries(teams.map(t=>[t.id, {team:t, list:[]}]))
-  const unassigned = []
-  for(const m of members){
-    const hasTeams = Array.isArray(m.teams) && m.teams.length>0
-    if(!hasTeams){ unassigned.push(m); continue }
-    let placed = false
-    for(const tid of m.teams){ if(byId[tid]){ byId[tid].list.push(m); placed = true } }
-    if(!placed) unassigned.push(m)
-  }
-  for(const k of Object.keys(byId)) byId[k].list.sort((a,b)=> a.name.localeCompare(b.name, undefined, {sensitivity:'base'}))
-  unassigned.sort((a,b)=> a.name.localeCompare(b.name, undefined, {sensitivity:'base'}))
-  return { groups: Object.values(byId), unassigned }
-}
-
-
 export default function App(){
   const [lang,setLang] = useState('pt'); const t = I18N[lang]
   const [logo, setLogo] = useState('/logo.png')
@@ -46,7 +30,9 @@ export default function App(){
 
   const [spaceId, setSpaceId] = useState(import.meta.env.VITE_SPACE_ID || 'default')
   const [status, setStatus] = useState('')
-  const debTimer = useRef(null); const channelRef = useRef(null)
+  const debTimer = useRef(null); const channelRef = useRef(null);
+  const applyTimerRef = useRef(null); const lastRemotePayloadRef = useRef(null);
+  const APPLY_INTERVAL_MS = 3000
 
   // Load (config first)
   useEffect(()=>{
@@ -72,10 +58,7 @@ export default function App(){
     if(debTimer.current) clearTimeout(debTimer.current)
     debTimer.current = setTimeout(async ()=>{ const payload = { lang, logo, members, teams, selectedDates, scheduleDate, activeTeamId }; setStatus(t.syncing); const { error } = await supa.from('state').upsert({ id: spaceId, payload }, { onConflict: 'id' }); if(error){console.warn(error); setStatus('')} else setStatus(t.live) }, 800) }
   useEffect(()=>{ scheduleCloudSave() }, [spaceId,lang,logo,members,teams,selectedDates,scheduleDate,activeTeamId])
-  useEffect(()=>{ if(!supa||!spaceId) return; if(channelRef.current){channelRef.current.unsubscribe(); channelRef.current=null}
-    // 2-minute periodic refresh
-    const __poll = setInterval(()=>{ try{ fetchCloud(spaceId) }catch(e){} }, 120000); /*2min-poll*/
-     const ch=supa.channel('state_changes_'+spaceId).on('postgres_changes',{event:'*',schema:'public',table:'state',filter:`id=eq.${spaceId}`},(payload)=>{ const row=payload.new||payload.record; if(row?.payload) applyPayload(row.payload,true) }).subscribe(); channelRef.current=ch; fetchCloud(spaceId); return ()=>{ try{ clearInterval(__poll) }catch(e){} ch.unsubscribe() } },[spaceId])
+  useEffect(()=>{ if(!supa||!spaceId) return; if(channelRef.current){channelRef.current.unsubscribe(); channelRef.current=null} const ch=supa.channel('state_changes_'+spaceId).on('postgres_changes',{event:'*',schema:'public',table:'state',filter:`id=eq.${spaceId}`},(payload)=>{ const row=payload.new||payload.record; if(row?.payload) applyPayload(row.payload,true) }).subscribe(); channelRef.current=ch; fetchCloud(spaceId); return ()=>{ try{ if(applyTimerRef.current) clearTimeout(applyTimerRef.current) }catch(e){} ch.unsubscribe() } },[spaceId])
 
   // Helpers UI
   function onLogoUpload(file){ const r=new FileReader(); r.onload=()=>setLogo(String(r.result)); r.readAsDataURL(file) }
@@ -118,7 +101,7 @@ export default function App(){
       {/* Dates selection */}
       <div className="section panel">
         <b>{t.dates}</b>
-        <div className="date-actions">
+        <div className="hstack wrap" style={{gap:8, marginTop:10}}>
           <input type="date" onChange={(e)=> addDateFromPicker(e.target.value)} />
           <button className="primary" onClick={pickAllSundaysCurrentMonth}>{t.pickSundays}</button>
         </div>
@@ -159,54 +142,18 @@ export default function App(){
 
       {/* Members & Actions */}
       <div className="section grid grid-3">
-        
-<div className="panel">
-  <b>{t.members}</b>
-
-  <div className="hstack" style={{gap:8, margin:'10px 0'}}>
-    <input value={newMember} onChange={e=>setNewMember(e.target.value)} placeholder={t.addMemberPlaceholder} style={{flex:1}}/>
-    <button className="primary" onClick={addMember}>{t.add}</button>
-  </div>
-
-  {(() => {
-    const { groups, unassigned } = groupMembersByTeam(teams, members);
-    return (
-      <div className="vstack" style={{gap:12}}>
-        {groups.map(g => (
-          <details key={g.team.id} open>
-            <summary><b>{g.team.name}</b> <span className="kpill">{g.list.length}</span></summary>
-            <div style={{display:'grid', gap:10, marginTop:8}}>
-              {g.list.map(m => (
-                <div key={m.name} className="vstack">
-                  <div className="hstack" style={{justifyContent:'space-between'}}>
-                    <span>{m.name}</span>
-                    <button onClick={()=>removeMember(m.name)}>{t.remove}</button>
-                  </div>
-                  <select multiple size={3}
-                    value={m.teams||[]}
-                    onChange={(e)=>{
-                      const selected = Array.from(e.target.selectedOptions).map(o=>o.value)
-                      setMembers(prev=> prev.map(mm=> mm.name===m.name? {...mm, teams:selected} : mm))
-                    }}
-                    style={{minWidth:180}}>
-                    {teams.map(team=> <option key={team.id} value={team.id}>{team.name}</option>)}
-                  </select>
-                  <div className="small">{t.rosterMemberTeams}</div>
-                </div>
-              ))}
-              {g.list.length===0 && <div className="small">— sem membros —</div>}
-            </div>
-          </details>
-        ))}
-
-        <details open>
-          <summary><b>Sem equipe</b> <span className="kpill">{unassigned.length}</span></summary>
-          <div style={{display:'grid', gap:10, marginTop:8}}>
-            {unassigned.map(m => (
+        <div className="panel">
+          <b>{t.members}</b>
+          <div className="hstack" style={{gap:8, margin:'10px 0'}}>
+            <input value={newMember} onChange={e=>setNewMember(e.target.value)} placeholder={t.addMemberPlaceholder} style={{flex:1}}/>
+            <button className="primary" onClick={()=>{ const n=newMember.trim(); if(!n) return; if(members.some(m=>m.name===n)){ alert(t.existsName); return } setMembers([...members,{name:n,teams:[]}]); setNewMember('') }}>{t.add}</button>
+          </div>
+          <div style={{display:'grid', gap:10}}>
+            {members.map(m=>(
               <div key={m.name} className="vstack">
                 <div className="hstack" style={{justifyContent:'space-between'}}>
                   <span>{m.name}</span>
-                  <button onClick={()=>removeMember(m.name)}>{t.remove}</button>
+                  <button onClick={()=>{ setMembers(members.filter(mm=>mm.name!==m.name)); setScheduleDate(prev=>{ const c=structuredClone(prev); for(const iso of Object.keys(c)){ for(const teamId of Object.keys(c[iso]||{})){ for(const role of Object.keys(c[iso][teamId]||{})){ if(c[iso][teamId][role]===m.name) c[iso][teamId][role]='' } } } return c }) }}>{t.remove}</button>
                 </div>
                 <select multiple size={3}
                   value={m.teams||[]}
@@ -220,14 +167,8 @@ export default function App(){
                 <div className="small">{t.rosterMemberTeams}</div>
               </div>
             ))}
-            {unassigned.length===0 && <div className="small">— nenhum —</div>}
           </div>
-        </details>
-      </div>
-    )
-  })()}
-</div>
-
+        </div>
 
         <div className="panel" style={{gridColumn:'span 2'}}>
           <b>{t.actions}</b>
