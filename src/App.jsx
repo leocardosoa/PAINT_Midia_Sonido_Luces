@@ -69,10 +69,13 @@ export default function App(){
 
   // Supabase: fetch, subscribe, save (debounced)
   async function fetchCloud(id){ if(!supa) return; setStatus('Loading…'); const { data } = await supa.from('state').select('payload').eq('id', id).single(); if(data?.payload) applyPayload(data.payload,true); setStatus('') }
-  function applyPayload(p,fromCloud=false){ try{ p.lang&&setLang(p.lang); p.logo&&setLogo(p.logo); Array.isArray(p.members)&&setMembers(p.members.map(m=> typeof m==='string'? {name:m,teams:[]}:m)); p.teams&&setTeams(p.teams); p.selectedDates&&setSelectedDates(p.selectedDates); p.scheduleDate&&setScheduleDate(p.scheduleDate); setActiveTeamId(p.activeTeamId ?? null); if(fromCloud) setStatus(t.live) }catch{} }
+  function applyPayload(p, fromCloud=false){
+  if (fromCloud && typeof p.__rev==='number' && p.__rev <= localRevRef.current) return;
+  if (typeof p.__rev==='number') localRevRef.current = p.__rev; try{ p.lang&&setLang(p.lang); p.logo&&setLogo(p.logo); Array.isArray(p.members)&&setMembers(p.members.map(m=> typeof m==='string'? {name:m,teams:[]}:m)); p.teams&&setTeams(p.teams); p.selectedDates&&setSelectedDates(p.selectedDates); p.scheduleDate&&setScheduleDate(p.scheduleDate); setActiveTeamId(p.activeTeamId ?? null); if(fromCloud) setStatus(t.live) }catch{} }
   function scheduleCloudSave(){ if(!supa||!spaceId) return; 
     if(debTimer.current) clearTimeout(debTimer.current)
-    debTimer.current = setTimeout(async ()=>{ const payload = { lang, logo, members, teams, selectedDates, scheduleDate, activeTeamId }; setStatus(t.syncing); const { error } = await supa.from('state').upsert({ id: spaceId, payload }, { onConflict: 'id' }); if(error){console.warn(error); setStatus('')} else setStatus(t.live) }, 800) }
+    debTimer.current = setTimeout(async ()=>{ const payload = { lang, logo, members, teams, selectedDates, scheduleDate, activeTeamId , __rev: (localRevRef.current + 1) }; setStatus(t.syncing); localRevRef.current = payload.__rev;
+      const { error } = await supa.from('state').upsert({ id: spaceId, payload }, { onConflict: 'id' }); if(error){console.warn(error); setStatus('')} else setStatus(t.live) }, 800) }
   useEffect(()=>{ scheduleCloudSave() }, [spaceId,lang,logo,members,teams,selectedDates,scheduleDate,activeTeamId])
   useEffect(()=>{ if(!supa||!spaceId) return; if(channelRef.current){channelRef.current.unsubscribe(); channelRef.current=null} const ch=supa.channel('state_changes_'+spaceId).on('postgres_changes',{event:'*',schema:'public',table:'state',filter:`id=eq.${spaceId}`},(payload)=>{ const row=payload.new||payload.record; if(row?.payload) applyPayload(row.payload,true) }).subscribe(); channelRef.current=ch; fetchCloud(spaceId); return ()=>{ try{ if(applyTimerRef.current) clearTimeout(applyTimerRef.current) }catch(e){} ch.unsubscribe() } },[spaceId])
 
@@ -95,7 +98,7 @@ export default function App(){
   return (<div>
     <header><div className="container hstack">
       <img src={logo} className="logo" alt="Logo" /><h1>{t.appTitle}</h1><div className="spacer"></div>
-      <span className="small">{t.sundayFixed}</span>
+      <span className="small">{''}</span>
       <select value={lang} onChange={e=>setLang(e.target.value)} style={{marginLeft:12}}>
         <option value="pt">Português</option><option value="es">Español</option><option value="en">English</option>
       </select>
