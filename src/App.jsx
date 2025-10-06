@@ -72,7 +72,10 @@ export default function App(){
     if(debTimer.current) clearTimeout(debTimer.current)
     debTimer.current = setTimeout(async ()=>{ const payload = { lang, logo, members, teams, selectedDates, scheduleDate, activeTeamId }; setStatus(t.syncing); const { error } = await supa.from('state').upsert({ id: spaceId, payload }, { onConflict: 'id' }); if(error){console.warn(error); setStatus('')} else setStatus(t.live) }, 800) }
   useEffect(()=>{ scheduleCloudSave() }, [spaceId,lang,logo,members,teams,selectedDates,scheduleDate,activeTeamId])
-  useEffect(()=>{ if(!supa||!spaceId) return; if(channelRef.current){channelRef.current.unsubscribe(); channelRef.current=null} const ch=supa.channel('state_changes_'+spaceId).on('postgres_changes',{event:'*',schema:'public',table:'state',filter:`id=eq.${spaceId}`},(payload)=>{ const row=payload.new||payload.record; if(row?.payload) applyPayload(row.payload,true) }).subscribe(); channelRef.current=ch; fetchCloud(spaceId); return ()=>{ ch.unsubscribe() } },[spaceId])
+  useEffect(()=>{ if(!supa||!spaceId) return; if(channelRef.current){channelRef.current.unsubscribe(); channelRef.current=null}
+    // 2-minute periodic refresh
+    const __poll = setInterval(()=>{ try{ fetchCloud(spaceId) }catch(e){} }, 120000); /*2min-poll*/
+     const ch=supa.channel('state_changes_'+spaceId).on('postgres_changes',{event:'*',schema:'public',table:'state',filter:`id=eq.${spaceId}`},(payload)=>{ const row=payload.new||payload.record; if(row?.payload) applyPayload(row.payload,true) }).subscribe(); channelRef.current=ch; fetchCloud(spaceId); return ()=>{ try{ clearInterval(__poll) }catch(e){} ch.unsubscribe() } },[spaceId])
 
   // Helpers UI
   function onLogoUpload(file){ const r=new FileReader(); r.onload=()=>setLogo(String(r.result)); r.readAsDataURL(file) }
@@ -127,7 +130,7 @@ export default function App(){
                 {selectedDates.map(iso=> (
                   <tr key={iso}>
                     <td>{iso}</td><td>{weekdayName(iso, lang)}</td><td>{isSundayISO(iso)? 'Sim' : 'Não'}</td>
-                    <td><button onClick={()=>removeDate(iso)} disabled={isSundayISO(iso)}>{t.remove}</button></td>
+                    <td><button onClick={()=>removeDate(iso)}>{t.remove}</button></td>
                   </tr>
                 ))}
               </tbody>
