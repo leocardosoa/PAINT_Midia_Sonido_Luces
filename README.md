@@ -1,9 +1,15 @@
-# Escala — Equipes (Supabase, PT/ES/EN)
+# Escala — Equipes (Supabase, modo Datas apenas)
 
-Persistência **compartilhada** via Supabase, i18n, modo Semanal & Datas, roster por equipe, XLSX export.
+Requisitos implementados:
+- Selecionar **equipes por membro** (multi-select no painel de Membros).
+- **Sem** modo semanal — somente **Datas específicas**.
+- Tabela de escala mostra coluna **Dia da semana**.
+- Botão para **Selecionar todos os domingos do mês atual**.
+- **Supabase** para persistência compartilhada (tabela `state` com `{ id, payload }`).
+- **XLSX export** (aba `Datas`).
 
-## 1) Criar tabela no Supabase (SQL)
-No Supabase (projeto > SQL Editor), execute:
+## Setup Supabase (SQL)
+No SQL Editor do seu projeto:
 ```sql
 create table if not exists public.state (
   id text primary key,
@@ -13,37 +19,25 @@ create table if not exists public.state (
 
 alter table public.state enable row level security;
 
--- POLÍTICAS (DEMO: abertas; para produção, restrinja!)
-create policy "anon can read" on public.state
-  for select using (true);
-
-create policy "anon can insert" on public.state
-  for insert with check (true);
-
-create policy "anon can update" on public.state
-  for update using (true);
+-- Políticas abertas para protótipo (restrinja em prod):
+create policy "anon can read" on public.state for select using (true);
+create policy "anon can insert" on public.state for insert with check (true);
+create policy "anon can update" on public.state for update using (true);
 ```
 
-> ⚠️ **Segurança**: As políticas acima permitem leitura/escrita anônimas (úteis para protótipo). Para produção, use autenticação (Auth) e políticas mais restritivas.
-
-## 2) Variáveis de ambiente
-Crie `.env.local` na raiz do projeto:
+## Variáveis (.env.local)
 ```
 VITE_SUPABASE_URL=SEU_URL
 VITE_SUPABASE_ANON_KEY=SUA_ANON_KEY
 VITE_SPACE_ID=pic-demo
 ```
 
-## 3) Rodar e publicar
+## Rodar / Publicar
 ```bash
 npm install
 npm run dev
 
-# Build para Netlify/Vercel/GH Pages
+# Build (Netlify/Vercel/GH Pages)
 npm run build
 # Publicar a pasta dist/
 ```
-
-## 4) Como compartilhar
-Use o campo **Space** (ex.: `pic-panama`). Todos que acessarem o site com `?space=pic-panama`
-carregarão/guardarão no mesmo registro da tabela `state`.
