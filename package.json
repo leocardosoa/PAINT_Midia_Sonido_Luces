@@ -1,8 +1,7 @@
 {
-  "name": "escala-midia-multi-team-supabase-dates-only",
+  "name": "escala-midia-multi-team-supabase-dates-only-grouped",
   "private": true,
   "version": "1.0.0",
-  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

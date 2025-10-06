@@ -1,43 +1,36 @@
-# Escala — Equipes (Supabase, modo Datas apenas)
+# Escala — Supabase agrupado por equipe
 
-Requisitos implementados:
-- Selecionar **equipes por membro** (multi-select no painel de Membros).
-- **Sem** modo semanal — somente **Datas específicas**.
-- Tabela de escala mostra coluna **Dia da semana**.
-- Botão para **Selecionar todos os domingos do mês atual**.
-- **Supabase** para persistência compartilhada (tabela `state` com `{ id, payload }`).
-- **XLSX export** (aba `Datas`).
-
-## Setup Supabase (SQL)
-No SQL Editor do seu projeto:
+## 1️⃣ Criar tabela no Supabase
 ```sql
 create table if not exists public.state (
   id text primary key,
   payload jsonb not null,
   updated_at timestamp with time zone default now()
 );
-
 alter table public.state enable row level security;
-
--- Políticas abertas para protótipo (restrinja em prod):
-create policy "anon can read" on public.state for select using (true);
-create policy "anon can insert" on public.state for insert with check (true);
-create policy "anon can update" on public.state for update using (true);
+create policy "anon read" on public.state for select using (true);
+create policy "anon insert" on public.state for insert with check (true);
+create policy "anon update" on public.state for update using (true);
 ```
 
-## Variáveis (.env.local)
+Ative **Realtime**: em `Database → Replication → Publications`, adicione `public.state`.
+
+## 2️⃣ Configurar `.env.local`
+Na raiz do projeto:
 ```
-VITE_SUPABASE_URL=SEU_URL
-VITE_SUPABASE_ANON_KEY=SUA_ANON_KEY
+VITE_SUPABASE_URL=https://SEU-PROJ.supabase.co
+VITE_SUPABASE_ANON_KEY=sua_chave_anon
 VITE_SPACE_ID=pic-demo
 ```
+> ⚠️ O arquivo deve se chamar `.env.local` (não `local.env`).
 
-## Rodar / Publicar
+## 3️⃣ Rodar localmente
 ```bash
 npm install
 npm run dev
-
-# Build (Netlify/Vercel/GH Pages)
-npm run build
-# Publicar a pasta dist/
 ```
+
+Se aparecer "Sem Supabase" no topo, verifique:
+- URL e chave corretas.
+- `.env.local` salvo e servidor reiniciado.
+- Variáveis também configuradas no Netlify/Vercel em caso de deploy.
