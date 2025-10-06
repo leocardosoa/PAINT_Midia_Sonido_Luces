@@ -8,9 +8,35 @@ const I18N = {
 }
 const WEEK_KEYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
 const STORAGE_KEY = 'escala_midia_multi_team_v3'
+const CONFIG_STORAGE_KEY = 'escala_midia_multi_team_config_v1'
 function uid(){ return Math.random().toString(36).slice(2,9) }
 function fmtDate(d){ const dt=new Date(d); const m=(dt.getMonth()+1+'').padStart(2,'0'); const day=(dt.getDate()+1-1+'').padStart(2,'0'); return dt.getFullYear()+ '-' + m + '-' + day }
 function isSundayISO(iso){ const dt=new Date(iso+'T00:00:00'); return dt.getDay()===0 }
+
+function encodeState(obj){
+  const json = JSON.stringify(obj)
+  const b64 = btoa(unescape(encodeURIComponent(json)))
+  return b64
+}
+function decodeState(b64){
+  try{
+    const json = decodeURIComponent(escape(atob(b64)))
+    return JSON.parse(json)
+  }catch(e){ return null }
+}
+function stateToShareLink(state){
+  const b64 = encodeState(state)
+  const url = new URL(window.location.href)
+  url.hash = 'state=' + b64
+  return url.toString()
+}
+function readStateFromHash(){
+  const h = window.location.hash || ''
+  const m = h.match(/state=([^&]+)/)
+  if(!m) return null
+  return decodeState(m[1])
+}
+
 
 export default function App(){
   const [lang,setLang] = useState('pt'); const t = I18N[lang]
@@ -58,6 +84,18 @@ export default function App(){
 
   useEffect(()=>{ if(activeTeamId===null && teams.length) setActiveTeamId(teams[0].id) },[teams,activeTeamId])
 
+  // autosave config (members, teams) independently
+  useEffect(()=>{ // autosave config
+    const cfg = { members, teams }
+    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(cfg))
+  }, [members, teams])
+  // autosave FULL state (days/dates + assignments), so next visit keeps everything
+  useEffect(()=>{ // autosave FULL state
+    const data = { lang, logo, members, teams, daysActive:{...daysActive,sunday:true}, schedule, selectedDates, scheduleDate, activeTeamId, mode }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  }, [lang, logo, members, teams, daysActive, schedule, selectedDates, scheduleDate, activeTeamId, mode])
+
+
   function save(){
     const data = { lang, logo, members, teams, daysActive:{...daysActive,sunday:true}, schedule, selectedDates, scheduleDate, activeTeamId, mode }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
@@ -68,6 +106,8 @@ export default function App(){
     const c={}; WEEK_KEYS.forEach(d=>c[d]={}); setSchedule(c)
     setSelectedDates([]); setScheduleDate({})
   }
+  function exportConfig(){ const blob=new Blob([JSON.stringify({ members, teams }, null, 2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='config-escala.json'; a.click(); URL.revokeObjectURL(url) }
+  function importConfig(file){ const r=new FileReader(); r.onload=()=>{ try{ const c=JSON.parse(String(r.result)); if(Array.isArray(c.members)) setMembers(c.members); if(Array.isArray(c.teams)) setTeams(c.teams) }catch{ alert('Invalid config.') } }; r.readAsText(file) }
   function exportJSON(){
     const blob=new Blob([JSON.stringify({ lang, logo, members, teams, daysActive:{...daysActive,sunday:true}, schedule, selectedDates, scheduleDate }, null, 2)],{type:'application/json'})
     const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='escala-midia.json'; a.click(); URL.revokeObjectURL(url)
@@ -279,6 +319,17 @@ export default function App(){
               <button onClick={()=>window.print()}>{t.print}</button>
               <button onClick={()=>{ navigator.clipboard.writeText(summaryText); alert('OK') }}>{t.copy}</button>
               <button onClick={exportXLSX}>{t.exportXLSX}</button>
+              <button onClick={exportConfig}>Exportar Config</button>
+              <label className="file">
+                <input type="file" accept="application/json" style={{display:'none'}} onChange={(e)=> e.target.files?.[0] && importConfig(e.target.files[0]) }/>
+                <span>Importar Config</span>
+              </label>
+              <button onClick={()=>{
+                const state = { lang, logo, members, teams, daysActive, schedule, selectedDates, scheduleDate, activeTeamId, mode }
+                const url = stateToShareLink(state)
+                navigator.clipboard.writeText(url)
+                alert('Link copiado! Cole e compartilhe com quem vai editar.')
+              }}>Gerar link compartilhável</button>
             </div>
 
             {/* Team tabs */}
